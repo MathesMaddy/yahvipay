@@ -388,4 +388,259 @@ app.post('/login-user', async(req, res) => {
     }
 })
 
+// mobile recharge
+app.post('/mobile-recharge', async(req, res) => {
+    const client = DBClient();
+    try {        
+        const { phoneNo, rechargePlan, paymentAmount, passwordPin } = req.body;
+        const { token } = req.cookies;
+        if(!token) return res.status(400).json('User not authenticate')
+        // checking phone number 
+        if(!isNaN(Number(phoneNo))) return res.status(400).json('Invalid phone number') 
+        // checking account number
+        if(!isNaN(Number(paymentAmount))) return res.status(400).json('Invalid Payment Plan') 
+        // checking account number
+        if(isNaN(rechargePlan)) return res.status(400).json('Invalid recharge plan') 
+        // phone number should be length 10
+        if(Number(phoneNo).toString().length !== 10) return res.status(400).json('Invalid phone number')
+        // password pin should be length 6
+        if(Number(passwordPin).toString().length !== 6) return res.status(400).json('Password Pin should be 6')
+        // checking all the input details is given
+        if(!phoneNo && !rechargePlan && !paymentAmount) {
+            return res.status(400).json('details required')
+        }
+        jwt.verify(token, secret, {}, async(err, info) => {
+            if(err) throw err
+            if(info) {
+                const { userId } = info
+                await client.connect();
+                let transactionId = `transactionId${Date.now()}`
+                const createdDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+                let dbName = 'yahvipay'
+                const db = client.db(dbName);
+                // login users collection
+                let loginUsersCollectionName = 'loginUsers';
+                const loginUserCollection = db.collection(loginUsersCollectionName);
+                const checkAccountBalance = loginUserCollection.findOne({ userId : userId }, {
+                    projection : {
+                        _id : 0,
+                        accountBalace : 1
+                    }
+                })
+                // checking account balance
+                if(checkAccountBalance.accountBalace >= Number(paymentAmount)) {
+                    // update user account balance 
+                    const result = loginUserCollection.findOneAndUpdate({ userId : userId }, { $inc : { accountBalace : - Number(paymentAmount)} })
+                    if(result.acknowledged) {
+                        let usersTransactionsCollectionName = 'usersTransactions';
+                        const userTransactionsCollection = db.collection(usersTransactionsCollectionName);
+                        // create new transaction
+                        const createdTransaction = userTransactionsCollection.insertOne({
+                            transactionId : transactionId,
+                            sender : userId,
+                            receiver : rechargePlan,
+                            paymentAmount : paymentAmount,
+                            paymentStatus : 'paid',
+                            createdAt : createdDate
+                        })
+                        if(createdTransaction.acknowledged) {
+                            await client.close();
+                            return res.status(200).json('successfully recharge');
+                        }
+                        else {    
+                            await client.close();
+                            return res.status(400).json('transfer pending');
+                        }
+                    }
+                    else {
+                        await client.close();
+                        return res.status(400).json('problem with recharge');
+                    }
+                }
+                else { 
+                    await client.close();
+                    return res.status(400).json('Insufficient balance');
+                }
+            }
+            else {
+                await client.close();
+                return res.status(400).json('User not authenticate')
+            }
+        })
+    }
+    catch {
+        await client.close();
+        return res.status(400).json('Error');
+    }
+})
+
+// dth recharge
+app.post('/dth-recharge', async(req, res) => {
+    const client = DBClient();
+    try {        
+        const { dthNumber, rechargePlan, paymentAmount, passwordPin } = req.body;
+        const { token } = req.cookies;
+        if(!token) return res.status(400).json('User not authenticate')
+        // checking phone number 
+        if(!isNaN(Number(dthNumber))) return res.status(400).json('Invalid phone number') 
+        // checking account number
+        if(!isNaN(Number(paymentAmount))) return res.status(400).json('Invalid Payment Plan') 
+        // checking account number
+        if(isNaN(rechargePlan)) return res.status(400).json('Invalid recharge plan') 
+        // // phone number should be length 10
+        // if(Number(phoneNo).toString().length !== 10) return res.status(400).json('Invalid phone number')
+        // password pin should be length 6
+        if(Number(passwordPin).toString().length !== 6) return res.status(400).json('Password Pin should be 6')
+        // checking all the input details is given
+        if(!dthNumber && !rechargePlan && !paymentAmount) {
+            return res.status(400).json('details required')
+        }
+        jwt.verify(token, secret, {}, async(err, info) => {
+            if(err) throw err
+            if(info) {
+                const { userId } = info
+                await client.connect();
+                let transactionId = `transactionId${Date.now()}`
+                const createdDate = new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" });
+                let dbName = 'yahvipay'
+                const db = client.db(dbName);
+                // login users collection
+                let loginUsersCollectionName = 'loginUsers';
+                const loginUserCollection = db.collection(loginUsersCollectionName);
+                const checkAccountBalance = loginUserCollection.findOne({ userId : userId }, {
+                    projection : {
+                        _id : 0,
+                        accountBalace : 1
+                    }
+                })
+                // checking user account balance
+                if(checkAccountBalance.accountBalace >= Number(paymentAmount)) {
+                    // update the user account balance
+                    const result = loginUserCollection.findOneAndUpdate({ userId : userId }, { $inc : { accountBalace : - Number(paymentAmount)} })
+                    if(result.acknowledged) {
+                        let usersTransactionsCollectionName = 'usersTransactions';
+                        const userTransactionsCollection = db.collection(usersTransactionsCollectionName);
+                        // create new transaction
+                        const createdTransaction = userTransactionsCollection.insertOne({
+                            transactionId : transactionId,
+                            sender : userId,
+                            receiver : rechargePlan,
+                            paymentAmount : paymentAmount,
+                            paymentStatus : 'paid',
+                            createdAt : createdDate
+                        })
+                        if(createdTransaction.acknowledged) {
+                            await client.close();
+                            return res.status(200).json('successfully recharge');
+                        }
+                        else {    
+                            await client.close();
+                            return res.status(400).json('transfer pending');
+                        }
+                    }
+                    else {
+                        await client.close();
+                        return res.status(400).json('problem with recharge');
+                    }
+                }
+                else { 
+                    await client.close();
+                    return res.status(400).json('Insufficient balance');
+                }
+            }
+            else {
+                await client.close();
+                return res.status(400).json('User not authenticate')
+            }
+        })
+    }
+    catch {
+        await client.close();
+        return res.status(400).json('Error');
+    }
+})
+
+app.get('/mobile-recharge-plan', async(req, res) => {
+    const client = DBClient();
+    try {
+        const { token } = req.cookies;
+        if(token) return res.status(400).json('User not authenticate')
+        jwt.verify(token, secret, {}, async(err, info) => {
+            if(err) throw err
+            if(info) {
+                const { userId } = info
+                await client.connect();
+                let dbName = 'yahvipay'
+                const db = client.db(dbName);
+                // recharges collection
+                let rechargeCollectionName = 'recharges';
+                const rechargeCollection = db.collection(rechargeCollectionName);
+                // get mobile recharge plan's
+                const mobileRecharge = rechargeCollection.findOne({ mobileRecharge }, {
+                    projection : {
+                        _id : 0
+                    }
+                })
+                if(mobileRecharge.acknowledged) {
+                    await client.close();
+                    return res.status(200).json(mobileRecharge)
+                }
+                else {
+                    await client.close();
+                    return res.status(400).json('problem getting plan')
+                }
+            }
+            else {
+                await client.close();
+                return res.status(400).json('User not authenticate')
+            }
+        })
+    }
+    catch(e) {
+        await client.close();
+        return res.status(400).json('Error')
+    }
+})
+
+app.get('/dth-recharge-plan', async(req, res) => {
+    const client = DBClient();
+    try {
+        const { token } = req.cookies;
+        if(token) return res.status(400).json('User not authenticate')
+        jwt.verify(token, secret, {}, async(err, info) => {
+            if(err) throw err
+            if(info) {
+                const { userId } = info
+                await client.connect();
+                let dbName = 'yahvipay'
+                const db = client.db(dbName);
+                // recharges collection
+                let rechargeCollectionName = 'recharges';
+                const rechargeCollection = db.collection(rechargeCollectionName);
+                // get dth recharge plan's
+                const dthRecharge = rechargeCollection.findOne({ dthRecharge }, {
+                    projection : {
+                        _id : 0
+                    }
+                })
+                if(dthRecharge.acknowledged) {
+                    await client.close();
+                    return res.status(200).json(dthRecharge)
+                }
+                else {
+                    await client.close();
+                    return res.status(400).json('problem getting plan')
+                }
+            }
+            else {
+                await client.close();
+                return res.status(400).json('User not authenticate')
+            }
+        })
+    }
+    catch(e) {
+        await client.close();
+        return res.status(400).json('Error')
+    }
+})
 app.listen(PORT, console.log(`Server is listening ${PORT}`));
